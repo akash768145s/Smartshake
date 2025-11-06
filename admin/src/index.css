@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    /* Smartshake Dark Theme - Base Colors */
+    --background: 80 8% 10%;           /* #1b1d1a - Deep dark with green tint */
+    --foreground: 0 0% 93%;            /* #ececec - Light text */
+    
+    --card: 80 8% 8%;                  /* Slightly lighter than background */
+    --card-foreground: 0 0% 93%;
+    
+    --popover: 80 8% 12%;
+    --popover-foreground: 0 0% 93%;
+    
+    /* Neon Green Primary */
+    --primary: 80 75% 46%;             /* #83cd1d - Darker neon green */
+    --primary-foreground: 80 8% 10%;   /* Dark text on green */
+    --primary-glow: 80 87% 72%;        /* #bcf272 - Light neon green for glows */
+    
+    /* Secondary - Muted dark */
+    --secondary: 80 8% 15%;
+    --secondary-foreground: 0 0% 93%;
+    
+    --muted: 80 8% 15%;
+    --muted-foreground: 0 0% 65%;
+    
+    /* Orange-Red Accent */
+    --accent: 9 100% 55%;              /* #ff3e1b - Vibrant orange */
+    --accent-foreground: 0 0% 93%;
+    
+    /* Status Colors */
+    --destructive: 0 84% 60%;          /* Critical/Error red */
+    --destructive-foreground: 0 0% 93%;
+    
+    --success: 151 83% 35%;            /* Success green */
+    --warning: 47 95% 55%;             /* Warning amber */
+    --info: 200 98% 55%;               /* Info blue */
+    
+    /* UI Elements */
+    --border: 0 0% 20%;
+    --input: 80 8% 15%;
+    --ring: 80 75% 46%;                /* Green focus ring */
+    
+    --radius: 1rem;                    /* Rounded corners */
+    
+    /* Sidebar */
+    --sidebar-background: 80 8% 8%;
+    --sidebar-foreground: 0 0% 93%;
+    --sidebar-primary: 80 75% 46%;
+    --sidebar-primary-foreground: 80 8% 10%;
+    --sidebar-accent: 80 8% 15%;
+    --sidebar-accent-foreground: 0 0% 93%;
+    --sidebar-border: 0 0% 20%;
+    --sidebar-ring: 80 75% 46%;
+    
+    /* Custom Effects */
+    --neon-glow: 80 87% 72%;           /* Light green glow */
+    --glass-bg: 80 8% 8%;              /* Glass morphism background */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    font-feature-settings: "tnum" 1; /* Tabular numbers */
+  }
+  
+  /* Neon glow effect */
+  .neon-glow {
+    box-shadow: 0 0 20px hsl(var(--neon-glow) / 0.3),
+                0 0 40px hsl(var(--neon-glow) / 0.2);
+  }
+  
+  /* Glass morphism card */
+  .glass-card {
+    background: hsl(var(--glass-bg) / 0.4);
+    backdrop-filter: blur(12px);
+    border: 1px solid hsl(var(--border) / 0.5);
+  }
+  
+  /* Pulse animation for online status */
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 1;
+      box-shadow: 0 0 8px hsl(var(--primary) / 0.6);
+    }
+    50% {
+      opacity: 0.8;
+      box-shadow: 0 0 16px hsl(var(--primary) / 0.8);
+    }
+  }
+  
+  .pulse-online {
+    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+  
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}

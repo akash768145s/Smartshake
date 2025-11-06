@@ -1,0 +1,10 @@
+project_id = "fwozdozshqaolesdlqxa"
+
+[functions.create-order]
+verify_jwt = false
+
+[functions.get-order]
+verify_jwt = false
+
+[functions.update-order-status]
+verify_jwt = false
