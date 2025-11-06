@@ -70,24 +70,46 @@ router.get('/', async (req, res) => {
         created_at: doc.data().created_at?.toDate() || new Date(),
       })) as OrderItem[];
 
-      // Get flavour names
+      // Get flavour names - flavours collection is optional
       const flavours: Array<{ name: string; scoops: number }> = [];
       for (const item of orderItems) {
-        const flavourDoc = await db.collection('flavours').doc(item.flavour_id).get();
-        if (flavourDoc.exists) {
+        try {
+          const flavourDoc = await db.collection('flavours').doc(item.flavour_id).get();
+          if (flavourDoc.exists) {
+            flavours.push({
+              name: flavourDoc.data()?.name || item.flavour_id,
+              scoops: item.scoops,
+            });
+          } else {
+            // Fallback: use flavour_id as name if flavours collection doesn't exist
+            flavours.push({
+              name: item.flavour_id.charAt(0).toUpperCase() + item.flavour_id.slice(1),
+              scoops: item.scoops,
+            });
+          }
+        } catch (error) {
+          // Flavours collection might not exist - use flavour_id as name
           flavours.push({
-            name: flavourDoc.data()?.name || 'Unknown',
+            name: item.flavour_id.charAt(0).toUpperCase() + item.flavour_id.slice(1),
             scoops: item.scoops,
           });
         }
       }
 
-      // Get machine name
+      // Get machine name - prefer stored name, fallback to lookup
+      // Machines collection is optional
       let machineName = 'Unknown Machine';
-      if (order.machineId) {
-        const machineDoc = await db.collection('machines').doc(order.machineId).get();
-        if (machineDoc.exists) {
-          machineName = machineDoc.data()?.name || 'Unknown Machine';
+      if (order.machineName) {
+        machineName = order.machineName;
+      } else if (order.machineId) {
+        try {
+          const machineDoc = await db.collection('machines').doc(order.machineId).get();
+          if (machineDoc.exists) {
+            machineName = machineDoc.data()?.name || 'Unknown Machine';
+          }
+        } catch (error) {
+          // Machines collection might not exist - that's okay
+          console.warn('Could not fetch machine name (machines collection may not exist)');
         }
       }
 

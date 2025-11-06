@@ -17,6 +17,19 @@ const LOCATIONS = [
   "Fitness First - Juhu",
 ];
 
+const DEMO_MACHINES = [
+  { id: 'MACHINE-001', location: 'Chennai' },
+  { id: 'MACHINE-002', location: 'Mumbai' },
+  { id: 'MACHINE-003', location: 'Delhi' },
+  { id: 'MACHINE-004', location: 'Hyderabad' },
+  { id: 'MACHINE-005', location: 'Pune' },
+  { id: 'MACHINE-006', location: 'Kochi' },
+  { id: 'MACHINE-007', location: 'Jaipur' },
+  { id: 'MACHINE-008', location: 'Bengaluru' },
+  { id: 'MACHINE-009', location: 'Ahmedabad' },
+  { id: 'MACHINE-010', location: 'Kolkata' },
+];
+
 async function seedFlavours() {
   console.log('Seeding flavours...');
   const batch = db.batch();
@@ -45,8 +58,54 @@ async function seedFlavours() {
 
 async function seedMachines() {
   console.log('Seeding machines...');
-  const batch = db.batch();
   
+  // Seed demo machines (MACHINE-001 to MACHINE-010)
+  let batch = db.batch();
+  let batchCount = 0;
+  const BATCH_LIMIT = 500; // Firestore batch limit
+  
+  for (const demoMachine of DEMO_MACHINES) {
+    const existingMachines = await db
+      .collection('machines')
+      .where('name', '==', demoMachine.id)
+      .get();
+    
+    if (existingMachines.empty) {
+      const ref = db.collection('machines').doc();
+      batch.set(ref, {
+        name: demoMachine.id,
+        location: demoMachine.location,
+        status: 'online',
+        uptime7d: 98 + Math.random() * 2,
+        dispenses24h: Math.floor(Math.random() * 100) + 50,
+        milkLevel: 30 + Math.random() * 70,
+        waterLevel: 40 + Math.random() * 60,
+        powderLevels: {
+          Chocolate: 30 + Math.random() * 70,
+          Vanilla: 20 + Math.random() * 80,
+          Strawberry: 25 + Math.random() * 75,
+          Banana: 35 + Math.random() * 65,
+          Coffee: 40 + Math.random() * 60,
+        },
+        lastClean: new Date(Date.now() - Math.random() * 48 * 60 * 60 * 1000),
+        lastPing: new Date(),
+        revenue24h: Math.floor(Math.random() * 5000) + 2000,
+      });
+      batchCount++;
+      console.log(`  Adding demo machine: ${demoMachine.id}`);
+      
+      // Commit batch if approaching limit
+      if (batchCount >= BATCH_LIMIT - 10) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
+    } else {
+      console.log(`  Demo machine already exists: ${demoMachine.id}`);
+    }
+  }
+  
+  // Seed original machines
   for (let i = 0; i < 12; i++) {
     const location = LOCATIONS[i % LOCATIONS.length];
     const machineNum = Math.floor(i / LOCATIONS.length) + 1;
@@ -78,13 +137,24 @@ async function seedMachines() {
         lastPing: new Date(),
         revenue24h: Math.floor(Math.random() * 5000) + 2000,
       });
+      batchCount++;
       console.log(`  Adding machine: ${name}`);
+      
+      // Commit batch if approaching limit
+      if (batchCount >= BATCH_LIMIT - 10) {
+        await batch.commit();
+        batch = db.batch();
+        batchCount = 0;
+      }
     } else {
       console.log(`  Machine already exists: ${name}`);
     }
   }
   
-  await batch.commit();
+  // Commit remaining batch
+  if (batchCount > 0) {
+    await batch.commit();
+  }
   console.log('✓ Machines seeded\n');
 }
 

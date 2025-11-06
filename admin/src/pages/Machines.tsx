@@ -47,7 +47,7 @@ export default function Machines() {
   }, [machines]);
 
   const filteredMachines = useMemo(() => {
-    return machines.filter((machine) => {
+    const filtered = machines.filter((machine) => {
       const matchesSearch =
         machine.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         machine.location.toLowerCase().includes(searchQuery.toLowerCase());
@@ -57,6 +57,23 @@ export default function Machines() {
         locationFilter === "all" || machine.location === locationFilter;
 
       return matchesSearch && matchesStatus && matchesLocation;
+    });
+
+    // Sort: Demo machines (MACHINE-XXX) first, then others
+    return filtered.sort((a, b) => {
+      const aIsDemo = a.name.startsWith('MACHINE-');
+      const bIsDemo = b.name.startsWith('MACHINE-');
+      
+      if (aIsDemo && !bIsDemo) return -1;
+      if (!aIsDemo && bIsDemo) return 1;
+      if (aIsDemo && bIsDemo) {
+        // Sort demo machines by number
+        const aNum = parseInt(a.name.split('-')[1] || '0');
+        const bNum = parseInt(b.name.split('-')[1] || '0');
+        return aNum - bNum;
+      }
+      // Sort others alphabetically
+      return a.name.localeCompare(b.name);
     });
   }, [machines, searchQuery, statusFilter, locationFilter]);
 

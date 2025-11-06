@@ -17,6 +17,7 @@ export interface Order {
   created_at: Date;
   completed_at?: Date;
   machineId?: string;
+  machineName?: string;
 }
 
 export interface OrderItem {
@@ -26,6 +27,8 @@ export interface OrderItem {
   scoops: number;
   price_per_scoop: number;
   created_at: Date;
+  machine_id?: string;
+  machine_name?: string;
 }
 
 // Admin Dashboard Types

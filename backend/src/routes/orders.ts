@@ -7,7 +7,7 @@ const router = express.Router();
 // POST /api/orders - Create a new order
 router.post('/', async (req, res) => {
   try {
-    const { base, quantity, total_price, flavours, machineId } = req.body;
+    const { base, quantity, total_price, flavours, machineId, machineName, idempotencyKey } = req.body;
 
     console.log('📦 Order creation request:', {
       base,
@@ -15,7 +15,43 @@ router.post('/', async (req, res) => {
       total_price,
       flavours: flavours ? Object.keys(flavours).length + ' flavours' : 'missing',
       machineId,
+      machineName,
+      idempotencyKey,
     });
+
+    // Check for duplicate request using idempotency key
+    if (idempotencyKey) {
+      const existingOrder = await db.collection('orders')
+        .where('idempotencyKey', '==', idempotencyKey)
+        .limit(1)
+        .get();
+      
+      if (!existingOrder.empty) {
+        const existingDoc = existingOrder.docs[0];
+        const existingOrderData = existingDoc.data();
+        const existingItemsSnapshot = await db
+          .collection('order_items')
+          .where('order_id', '==', existingDoc.id)
+          .get();
+        
+        const existingOrderItems = existingItemsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          created_at: doc.data().created_at?.toDate() || new Date(),
+        })) as OrderItem[];
+
+        console.log('⚠️ Duplicate request detected, returning existing order:', existingDoc.id);
+        return res.status(200).json({
+          order: {
+            id: existingDoc.id,
+            ...existingOrderData,
+            created_at: existingOrderData.created_at?.toDate() || new Date(),
+            completed_at: existingOrderData.completed_at?.toDate(),
+          },
+          orderItems: existingOrderItems,
+        });
+      }
+    }
 
     // Validate required fields
     if (!base) {
@@ -31,29 +67,52 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'Missing or empty field: flavours (must have at least one flavour)' });
     }
 
+    // If machineName not provided but machineId is, try to fetch machine name
+    // Machines collection is optional - if it doesn't exist, continue without it
+    let finalMachineName = machineName;
+    if (!finalMachineName && machineId) {
+      try {
+        const machineDoc = await db.collection('machines').doc(machineId).get();
+        if (machineDoc.exists) {
+          finalMachineName = machineDoc.data()?.name;
+        }
+      } catch (error) {
+        // Machines collection might not exist - that's okay
+        console.warn('Could not fetch machine name (machines collection may not exist):', error);
+      }
+    }
+
     // Create order
     const orderRef = db.collection('orders').doc();
-    const orderData: Omit<Order, 'id'> = {
+    const orderData: Omit<Order, 'id'> & { idempotencyKey?: string } = {
       base,
       quantity,
       total_price,
       status: 'pending',
       created_at: new Date(),
       ...(machineId && { machineId }),
+      ...(finalMachineName && { machineName: finalMachineName }),
+      ...(idempotencyKey && { idempotencyKey }),
     };
 
     await orderRef.set(orderData);
-    console.log(`✅ Order created: ${orderRef.id}`, { status: 'pending', machineId, total_price });
+    console.log(`✅ Order created: ${orderRef.id}`, { status: 'pending', machineId, machineName: finalMachineName, total_price });
 
     // Create order items
     const orderItems: OrderItem[] = [];
     for (const [flavourId, scoops] of Object.entries(flavours)) {
       if (typeof scoops === 'number' && scoops > 0) {
-        // Get flavour price
-        const flavourDoc = await db.collection('flavours').doc(flavourId).get();
-        const pricePerScoop = flavourDoc.exists 
-          ? (flavourDoc.data()?.price_per_scoop || 99)
-          : 99;
+        // Get flavour price - flavours collection is optional, default to 99 if not found
+        let pricePerScoop = 99;
+        try {
+          const flavourDoc = await db.collection('flavours').doc(flavourId).get();
+          if (flavourDoc.exists) {
+            pricePerScoop = flavourDoc.data()?.price_per_scoop || 99;
+          }
+        } catch (error) {
+          // Flavours collection might not exist - use default price
+          console.warn(`Could not fetch flavour price for ${flavourId}, using default 99`);
+        }
 
         const itemRef = db.collection('order_items').doc();
         const itemData: Omit<OrderItem, 'id'> = {
@@ -62,6 +121,8 @@ router.post('/', async (req, res) => {
           scoops: scoops as number,
           price_per_scoop: pricePerScoop,
           created_at: new Date(),
+          ...(machineId && { machine_id: machineId }),
+          ...(finalMachineName && { machine_name: finalMachineName }),
         };
 
         await itemRef.set(itemData);

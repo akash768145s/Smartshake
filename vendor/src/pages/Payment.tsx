@@ -31,6 +31,12 @@ const Payment = () => {
       navigate('/flavour');
       return;
     }
+    // Machine selection is optional - can proceed without it
+    // if (!order.selectedMachine) {
+    //   toast.error('Please select a machine first');
+    //   navigate('/');
+    //   return;
+    // }
   }, [order, navigate]);
 
   // Fetch flavours and machine ID
@@ -46,14 +52,30 @@ const Payment = () => {
         });
         setFlavoursMap(map);
 
-        // Fetch first machine ID (or use env var)
+        // Find machine ID by matching selected machine name
+        // Machines collection is optional - if it fails, continue without it
         try {
           const machines = await api.getMachines();
-          if (machines.length > 0) {
-            setMachineId(machines[0].id);
+          if (order.selectedMachine && machines.length > 0) {
+            // Find machine by name (MACHINE-001, etc.)
+            const matchedMachine = machines.find(
+              m => m.name === order.selectedMachine?.id
+            );
+            if (matchedMachine) {
+              setMachineId(matchedMachine.id);
+              console.log('Matched machine:', order.selectedMachine.id, '-> Firestore ID:', matchedMachine.id);
+            } else {
+              console.warn('Selected machine not found in database:', order.selectedMachine.id);
+              // Use env var or leave undefined - machines are optional
+              setMachineId(import.meta.env.VITE_MACHINE_ID);
+            }
+          } else {
+            // Fallback if no machine selected or machines collection empty
+            setMachineId(import.meta.env.VITE_MACHINE_ID);
           }
         } catch (error) {
-          // If machines API fails, use env var or leave undefined
+          // Machines collection might not exist - that's okay, continue without it
+          console.warn('Machines API failed (machines collection may not exist):', error);
           setMachineId(import.meta.env.VITE_MACHINE_ID);
         }
       } catch (error) {
@@ -62,9 +84,15 @@ const Payment = () => {
       }
     };
     fetchData();
-  }, []);
+  }, [order.selectedMachine]);
 
   const handlePayment = async (method: 'upi' | 'card') => {
+    // Prevent duplicate submissions
+    if (isProcessing) {
+      console.warn('Payment already processing, ignoring duplicate request');
+      return;
+    }
+
     // Validate order is complete
     if (!order.base) {
       toast.error('Please select a base (milk or water)');
@@ -89,20 +117,35 @@ const Payment = () => {
       const volumeInMl = order.quantity * 5;
       
       // Map flavour names (chocolate, vanilla, etc.) to Firestore document IDs
+      // Use a fallback mapping if API fails
+      const fallbackFlavourMap: Record<string, string> = {
+        'chocolate': 'chocolate',
+        'vanilla': 'vanilla',
+        'strawberry': 'strawberry',
+        'banana': 'banana',
+        'coffee': 'coffee',
+      };
+
       const flavoursWithIds: Record<string, number> = {};
       for (const [flavourName, scoops] of Object.entries(order.flavours)) {
-        const firestoreId = flavoursMap[flavourName.toLowerCase()];
-        if (firestoreId && scoops > 0) {
-          flavoursWithIds[firestoreId] = scoops;
-        } else {
-          console.warn(`Flavour "${flavourName}" not found in flavoursMap. Available:`, Object.keys(flavoursMap));
+        if (scoops > 0) {
+          // Try to get Firestore ID from API map first
+          const firestoreId = flavoursMap[flavourName.toLowerCase()];
+          if (firestoreId) {
+            flavoursWithIds[firestoreId] = scoops;
+          } else {
+            // Fallback: use flavour name as ID if API didn't load flavours
+            // This allows orders to work even if flavours collection is not set up
+            const fallbackId = fallbackFlavourMap[flavourName.toLowerCase()] || flavourName.toLowerCase();
+            flavoursWithIds[fallbackId] = scoops;
+            console.warn(`Using fallback flavour ID for "${flavourName}": ${fallbackId}`);
+          }
         }
       }
 
-      // If no flavours mapped (API failed or flavours not loaded), use mock mode
+      // Validate we have flavours
       if (Object.keys(flavoursWithIds).length === 0) {
-        console.error('No flavours mapped! Order flavours:', order.flavours, 'Flavours map:', flavoursMap);
-        toast.error('Failed to map flavours. Please try again.');
+        toast.error('Please select at least one flavour');
         setIsProcessing(false);
         return;
       }
@@ -135,6 +178,9 @@ const Payment = () => {
 
       // Create real order in Firestore
       // Use machineId from state (fetched from API) or env var
+      // Generate idempotency key to prevent duplicate orders
+      const idempotencyKey = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      
       console.log('Calling API to create order...');
       const { order: createdOrder } = await api.createOrder({
         base: order.base,
@@ -142,6 +188,8 @@ const Payment = () => {
         total_price: order.totalPrice,
         flavours: flavoursWithIds,
         machineId: machineId || import.meta.env.VITE_MACHINE_ID,
+        machineName: order.selectedMachine?.id || undefined,
+        idempotencyKey,
       });
 
       console.log('✅ Order created successfully:', createdOrder.id);

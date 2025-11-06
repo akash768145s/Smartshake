@@ -11,6 +11,7 @@ import QuantitySelection from "./pages/QuantitySelection";
 import Payment from "./pages/Payment";
 import Dispense from "./pages/Dispense";
 import Done from "./pages/Done";
+import MachineDemo from "./pages/MachineDemo";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -23,13 +24,15 @@ const App = () => (
         <Sonner />
         <BrowserRouter>
           <Routes>
-            <Route path="/" element={<Welcome />} />
+            <Route path="/" element={<MachineDemo />} />
+            <Route path="/welcome" element={<Welcome />} />
             <Route path="/flavour" element={<FlavourSelection />} />
             <Route path="/base" element={<BaseSelection />} />
             <Route path="/quantity" element={<QuantitySelection />} />
             <Route path="/payment" element={<Payment />} />
             <Route path="/dispense" element={<Dispense />} />
             <Route path="/done" element={<Done />} />
+            <Route path="/demo" element={<MachineDemo />} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

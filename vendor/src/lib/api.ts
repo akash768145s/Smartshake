@@ -35,6 +35,8 @@ export interface CreateOrderRequest {
   total_price: number;
   flavours: Record<string, number>; // flavourId -> scoops
   machineId?: string;
+  machineName?: string;
+  idempotencyKey?: string;
 }
 
 export interface Machine {

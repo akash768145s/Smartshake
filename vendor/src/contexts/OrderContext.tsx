@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 
 interface OrderState {
+  selectedMachine: { id: string; location: string } | null;
   flavours: Record<string, number>; // flavourId -> scoop count
   base: 'milk' | 'water' | null;
   quantity: number;
@@ -9,6 +10,7 @@ interface OrderState {
 
 interface OrderContextType {
   order: OrderState;
+  setSelectedMachine: (machine: { id: string; location: string } | null) => void;
   setFlavours: (flavours: Record<string, number>) => void;
   setBase: (base: 'milk' | 'water') => void;
   setQuantity: (quantity: number) => void;
@@ -18,6 +20,7 @@ interface OrderContextType {
 const OrderContext = createContext<OrderContextType | undefined>(undefined);
 
 const initialOrder: OrderState = {
+  selectedMachine: null,
   flavours: {},
   base: null,
   quantity: 0,
@@ -38,6 +41,10 @@ const calculatePrice = (quantity: number, flavours: Record<string, number>, base
 
 export const OrderProvider = ({ children }: { children: ReactNode }) => {
   const [order, setOrder] = useState<OrderState>(initialOrder);
+
+  const setSelectedMachine = (machine: { id: string; location: string } | null) => {
+    setOrder(prev => ({ ...prev, selectedMachine: machine }));
+  };
 
   const setFlavours = (flavours: Record<string, number>) => {
     setOrder(prev => ({
@@ -68,7 +75,7 @@ export const OrderProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <OrderContext.Provider value={{ order, setFlavours, setBase, setQuantity, resetOrder }}>
+    <OrderContext.Provider value={{ order, setSelectedMachine, setFlavours, setBase, setQuantity, resetOrder }}>
       {children}
     </OrderContext.Provider>
   );

@@ -110,5 +110,74 @@ router.post('/', async (req, res) => {
   }
 });
 
+// POST /api/machines/seed-demo - Seed demo machines (MACHINE-001 to MACHINE-010)
+router.post('/seed-demo', async (req, res) => {
+  try {
+    const DEMO_MACHINES = [
+      { id: 'MACHINE-001', location: 'Chennai' },
+      { id: 'MACHINE-002', location: 'Mumbai' },
+      { id: 'MACHINE-003', location: 'Delhi' },
+      { id: 'MACHINE-004', location: 'Hyderabad' },
+      { id: 'MACHINE-005', location: 'Pune' },
+      { id: 'MACHINE-006', location: 'Kochi' },
+      { id: 'MACHINE-007', location: 'Jaipur' },
+      { id: 'MACHINE-008', location: 'Bengaluru' },
+      { id: 'MACHINE-009', location: 'Ahmedabad' },
+      { id: 'MACHINE-010', location: 'Kolkata' },
+    ];
+
+    const batch = db.batch();
+    let addedCount = 0;
+    let existingCount = 0;
+
+    for (const demoMachine of DEMO_MACHINES) {
+      const existingMachines = await db
+        .collection('machines')
+        .where('name', '==', demoMachine.id)
+        .get();
+      
+      if (existingMachines.empty) {
+        const ref = db.collection('machines').doc();
+        batch.set(ref, {
+          name: demoMachine.id,
+          location: demoMachine.location,
+          status: 'online',
+          uptime7d: 98 + Math.random() * 2,
+          dispenses24h: Math.floor(Math.random() * 100) + 50,
+          milkLevel: 30 + Math.random() * 70,
+          waterLevel: 40 + Math.random() * 60,
+          powderLevels: {
+            Chocolate: 30 + Math.random() * 70,
+            Vanilla: 20 + Math.random() * 80,
+            Strawberry: 25 + Math.random() * 75,
+            Banana: 35 + Math.random() * 65,
+            Coffee: 40 + Math.random() * 60,
+          },
+          lastClean: new Date(Date.now() - Math.random() * 48 * 60 * 60 * 1000),
+          lastPing: new Date(),
+          revenue24h: Math.floor(Math.random() * 5000) + 2000,
+        });
+        addedCount++;
+      } else {
+        existingCount++;
+      }
+    }
+
+    if (addedCount > 0) {
+      await batch.commit();
+    }
+
+    res.json({
+      success: true,
+      message: `Demo machines seeded: ${addedCount} added, ${existingCount} already existed`,
+      added: addedCount,
+      existing: existingCount,
+    });
+  } catch (error) {
+    console.error('Error seeding demo machines:', error);
+    res.status(500).json({ error: 'Failed to seed demo machines' });
+  }
+});
+
 export default router;
 

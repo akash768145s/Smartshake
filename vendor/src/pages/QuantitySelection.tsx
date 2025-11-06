@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
@@ -8,7 +8,17 @@ import BrandLogo from '@/components/BrandLogo';
 const QuantitySelection = () => {
   const navigate = useNavigate();
   const { order, setQuantity } = useOrder();
-  const [sliderValue, setSliderValue] = useState(order.quantity || 40);
+  const defaultQuantity = order.quantity > 0 ? order.quantity : 40;
+  const [sliderValue, setSliderValue] = useState(defaultQuantity);
+
+  // Initialize quantity in context if it's 0 (one-time on mount)
+  useEffect(() => {
+    if (order.quantity === 0) {
+      setQuantity(40);
+      setSliderValue(40);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handleSliderChange = (value: number[]) => {
     setSliderValue(value[0]);

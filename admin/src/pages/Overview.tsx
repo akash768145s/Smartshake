@@ -17,35 +17,44 @@ function calculateKPIs(machines: Machine[], sales: Sale[], alerts: Alert[]) {
   const now = Date.now();
   const oneDayAgo = now - 24 * 60 * 60 * 1000;
   const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
-  
+
   const salesToday = sales.filter(s => new Date(s.timestamp).getTime() > oneDayAgo);
   const sales7d = sales.filter(s => new Date(s.timestamp).getTime() > sevenDaysAgo);
-  
+
   const revenueToday = salesToday.reduce((sum, s) => sum + s.total, 0);
   const dispensesToday = salesToday.length;
-  
-  const activeMachines = machines.filter(m => m.status === "online").length;
+
+  // Count demo machines from sales if machines collection is empty
+  const demoMachineNames = ['MACHINE-001', 'MACHINE-002', 'MACHINE-003', 'MACHINE-004', 'MACHINE-005',
+    'MACHINE-006', 'MACHINE-007', 'MACHINE-008', 'MACHINE-009', 'MACHINE-010'];
+  const machinesFromSales = new Set(sales.map(s => s.machineName).filter(name => demoMachineNames.includes(name)));
+  const totalMachines = machines.length > 0 ? machines.length : Math.max(10, machinesFromSales.size || 10);
+
+  const activeMachines = machines.length > 0
+    ? machines.filter(m => m.status === "online").length
+    : totalMachines; // Assume all demo machines are online if machines collection is empty
+
   const avgUptime = machines.length > 0
     ? machines.reduce((sum, m) => sum + m.uptime7d, 0) / machines.length
-    : 0;
-  
+    : 98.5; // Default uptime for demo machines
+
   const avgPrepTime = salesToday.length > 0
     ? salesToday.reduce((sum, s) => sum + s.duration, 0) / salesToday.length
     : 0;
-  
-  const machinesCleanedToday = machines.filter(
-    m => new Date(m.lastClean).getTime() > oneDayAgo
-  ).length;
-  const cleaningCompliance = machines.length > 0
-    ? (machinesCleanedToday / machines.length) * 100
+
+  const machinesCleanedToday = machines.length > 0
+    ? machines.filter(m => new Date(m.lastClean).getTime() > oneDayAgo).length
     : 0;
-  
+  const cleaningCompliance = totalMachines > 0
+    ? (machinesCleanedToday / totalMachines) * 100
+    : 0;
+
   return {
     revenueToday,
     dispensesToday,
     activeMachines,
-    totalMachines: machines.length,
-    avgUptime: isNaN(avgUptime) ? 0 : avgUptime,
+    totalMachines,
+    avgUptime: isNaN(avgUptime) ? 98.5 : avgUptime,
     avgPrepTime: isNaN(avgPrepTime) ? 0 : avgPrepTime,
     cleaningCompliance: isNaN(cleaningCompliance) ? 0 : cleaningCompliance,
     openAlerts: alerts.filter(a => a.status === "open").length,
@@ -98,19 +107,19 @@ export default function Overview() {
     const now = Date.now();
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
     const todaySales = sales.filter(s => new Date(s.timestamp).getTime() > oneDayAgo);
-    
+
     const hourly = Array.from({ length: 24 }, (_, hour) => ({
       hour: `${hour}:00`,
       count: 0,
       revenue: 0,
     }));
-    
+
     todaySales.forEach(sale => {
       const hour = new Date(sale.timestamp).getHours();
       hourly[hour].count++;
       hourly[hour].revenue += sale.total;
     });
-    
+
     return hourly;
   }, [sales]);
 
@@ -119,16 +128,16 @@ export default function Overview() {
     const now = Date.now();
     const sevenDaysAgo = now - 7 * 24 * 60 * 60 * 1000;
     const recentSales = sales.filter(s => new Date(s.timestamp).getTime() > sevenDaysAgo);
-    
+
     const distribution: Record<string, number> = {};
     FLAVOURS.forEach(f => distribution[f.name] = 0);
-    
+
     recentSales.forEach(sale => {
       sale.flavours.forEach(f => {
         distribution[f.name] += f.scoops;
       });
     });
-    
+
     return FLAVOURS.map((f, i) => ({
       name: f.name,
       value: distribution[f.name],
@@ -203,37 +212,37 @@ export default function Overview() {
           icon={<IndianRupee className="w-5 h-5" />}
           trend={revenueSparkline}
         />
-        
+
         <KPICard
           title="Dispenses Today"
           value={kpis.dispensesToday}
           delta={{ value: 8.2, label: "vs yesterday", positive: true }}
           icon={<Zap className="w-5 h-5" />}
         />
-        
+
         <KPICard
           title="Uptime (24h)"
-          value={machines.length > 0 ? `${kpis.avgUptime.toFixed(1)}%` : "0%"}
+          value={`${kpis.avgUptime.toFixed(1)}%`}
           delta={{ value: 0.3, label: "vs last week", positive: true }}
           icon={<Activity className="w-5 h-5" />}
         />
-        
+
         <KPICard
           title="Active Machines"
           value={`${kpis.activeMachines} / ${kpis.totalMachines}`}
           icon={<Server className="w-5 h-5" />}
         />
-        
+
         <KPICard
           title="Avg Prep Time"
           value={`${kpis.avgPrepTime.toFixed(0)}s`}
           delta={{ value: 2.1, label: "faster", positive: true }}
           icon={<Clock className="w-5 h-5" />}
         />
-        
+
         <KPICard
           title="Cleaning Compliance"
-          value={machines.length > 0 ? `${kpis.cleaningCompliance.toFixed(0)}%` : "0%"}
+          value={`${kpis.cleaningCompliance.toFixed(0)}%`}
           delta={{ value: 5.5, label: "vs last week", positive: true }}
           icon={<Sparkles className="w-5 h-5" />}
         />
@@ -347,31 +356,31 @@ export default function Overview() {
           </h3>
           <div className="space-y-3">
             {sales.slice(0, 8).map((sale) => (
-            <div
-              key={sale.id}
-              className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-xs font-medium">
-                  {sale.flavours.map(f => FLAVOURS.find(fl => fl.name === f.name)?.emoji).join("")}
-                </div>
-                <div>
-                  <div className="text-sm font-medium text-foreground">
-                    {sale.machineName}
+              <div
+                key={sale.id}
+                className="flex items-center justify-between py-2 border-b border-border/50 last:border-0"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-xs font-medium">
+                    {sale.flavours.map(f => FLAVOURS.find(fl => fl.name === f.name)?.emoji).join("")}
                   </div>
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      {sale.machineName}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {sale.flavours.map(f => `${f.scoops}x ${f.name}`).join(", ")} • {sale.quantity}ml
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-sm font-semibold text-foreground">₹{sale.total}</div>
                   <div className="text-xs text-muted-foreground">
-                    {sale.flavours.map(f => `${f.scoops}x ${f.name}`).join(", ")} • {sale.quantity}ml
+                    {Math.floor((Date.now() - new Date(sale.timestamp).getTime()) / 60000)}m ago
                   </div>
                 </div>
               </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold text-foreground">₹{sale.total}</div>
-                <div className="text-xs text-muted-foreground">
-                  {Math.floor((Date.now() - new Date(sale.timestamp).getTime()) / 60000)}m ago
-                </div>
-              </div>
-            </div>
-          ))}
+            ))}
           </div>
         </div>
       )}
