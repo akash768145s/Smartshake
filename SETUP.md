@@ -41,6 +41,10 @@ PORT=3001
 FIREBASE_PROJECT_ID=your-project-id
 FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour private key here\n-----END PRIVATE KEY-----\n"
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
+
+# Razorpay Payment Gateway (Optional - test keys are already configured)
+RAZORPAY_KEY_ID=rzp_test_RfxCaQGgFsdSRu
+RAZORPAY_KEY_SECRET=XnUkIhgRiEoRf7KoRkChdtwH
 ```
 
 **Copy from your JSON file:**
@@ -134,6 +138,12 @@ npm run dev
 - `GET /api/alerts` - Get alerts (supports `machineId`, `status`, `severity`)
 - `POST /api/alerts` - Create alert
 - `PATCH /api/alerts/:id` - Update alert
+
+### Payments (Razorpay)
+- `POST /api/payments/create-order` - Create Razorpay payment order
+- `POST /api/payments/verify` - Verify payment signature
+
+**Note:** Razorpay test keys are already configured. See [RAZORPAY_INTEGRATION.md](./RAZORPAY_INTEGRATION.md) for details.
 
 ---
 

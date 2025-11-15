@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect } from "react";
 import { FLAVOURS } from "@/lib/mockData";
 import { api, Machine, Sale } from "@/lib/api";
+import { formatTimeAgo } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -422,10 +423,7 @@ export default function Sales() {
               {filteredSales.slice(0, 20).map((sale) => (
                 <tr key={sale.id} className="border-b border-border">
                   <td className="p-3 text-sm">
-                    {new Date(sale.timestamp).toLocaleTimeString("en-US", {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatTimeAgo(sale.timestamp)}
                   </td>
                   <td className="p-3 text-sm font-medium">{sale.machineName}</td>
                   <td className="p-3">

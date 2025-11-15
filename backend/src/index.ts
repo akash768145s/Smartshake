@@ -6,6 +6,7 @@ import ordersRouter from './routes/orders';
 import machinesRouter from './routes/machines';
 import salesRouter from './routes/sales';
 import alertsRouter from './routes/alerts';
+import paymentsRouter from './routes/payments';
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ app.use('/api/orders', ordersRouter);
 app.use('/api/machines', machinesRouter);
 app.use('/api/sales', salesRouter);
 app.use('/api/alerts', alertsRouter);
+app.use('/api/payments', paymentsRouter);
 
 app.listen(PORT, () => {
   console.log(`🚀 Smartshake Backend running on port ${PORT}`);

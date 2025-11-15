@@ -81,6 +81,11 @@ router.post('/', async (req, res) => {
         console.warn('Could not fetch machine name (machines collection may not exist):', error);
       }
     }
+    
+    // Fallback: use machineId as machineName if still not set
+    if (!finalMachineName && machineId) {
+      finalMachineName = machineId;
+    }
 
     // Create order
     const orderRef = db.collection('orders').doc();

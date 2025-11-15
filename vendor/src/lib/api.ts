@@ -45,6 +45,21 @@ export interface Machine {
   location: string;
 }
 
+export interface RazorpayOrder {
+  id: string;
+  amount: number;
+  currency: string;
+  receipt: string;
+  key_id: string;
+}
+
+export interface PaymentVerification {
+  verified: boolean;
+  order_id?: string;
+  payment_id?: string;
+  error?: string;
+}
+
 class ApiClient {
   private async request<T>(endpoint: string, options?: RequestInit): Promise<T> {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -94,6 +109,30 @@ class ApiClient {
   // Machines
   async getMachines(): Promise<Machine[]> {
     return this.request<Machine[]>('/machines');
+  }
+
+  // Payments
+  async createPaymentOrder(data: {
+    amount: number;
+    currency?: string;
+    receipt?: string;
+    notes?: Record<string, string>;
+  }): Promise<RazorpayOrder> {
+    return this.request<RazorpayOrder>('/payments/create-order', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async verifyPayment(data: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }): Promise<PaymentVerification> {
+    return this.request<PaymentVerification>('/payments/verify', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 }
 

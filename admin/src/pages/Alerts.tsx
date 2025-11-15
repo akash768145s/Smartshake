@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { StatusPill } from "@/components/dashboard/StatusPill";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatTimeAgo } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -240,7 +241,7 @@ export default function Alerts() {
                     <span>{alert.machineName}</span>
                     <span>•</span>
                     <span>
-                      {Math.floor((Date.now() - new Date(alert.timestamp).getTime()) / 60000)}m ago
+                      {formatTimeAgo(alert.timestamp)}
                     </span>
                     {alert.occurrences > 1 && (
                       <>

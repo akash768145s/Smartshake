@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { FLAVOURS } from "@/lib/mockData";
 import { api, Machine, Sale, Alert } from "@/lib/api";
+import { formatTimeAgo } from "@/lib/utils";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 function calculateKPIs(machines: Machine[], sales: Sale[], alerts: Alert[]) {
@@ -376,7 +377,7 @@ export default function Overview() {
                 <div className="text-right">
                   <div className="text-sm font-semibold text-foreground">₹{sale.total}</div>
                   <div className="text-xs text-muted-foreground">
-                    {Math.floor((Date.now() - new Date(sale.timestamp).getTime()) / 60000)}m ago
+                    {formatTimeAgo(sale.timestamp)}
                   </div>
                 </div>
               </div>

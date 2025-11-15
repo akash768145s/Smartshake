@@ -2,10 +2,17 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { useOrder } from '@/contexts/OrderContext';
-import { QrCode } from 'lucide-react';
+import { QrCode, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import BrandLogo from '@/components/BrandLogo';
 import { api } from '@/lib/api';
+
+// Declare Razorpay types
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
 
 const Payment = () => {
   const navigate = useNavigate();
@@ -13,6 +20,7 @@ const Payment = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [flavoursMap, setFlavoursMap] = useState<Record<string, string>>({}); // name -> Firestore ID
   const [machineId, setMachineId] = useState<string | undefined>();
+  const [machineName, setMachineName] = useState<string | undefined>();
 
   // Validate order completeness on mount
   useEffect(() => {
@@ -31,12 +39,6 @@ const Payment = () => {
       navigate('/flavour');
       return;
     }
-    // Machine selection is optional - can proceed without it
-    // if (!order.selectedMachine) {
-    //   toast.error('Please select a machine first');
-    //   navigate('/');
-    //   return;
-    // }
   }, [order, navigate]);
 
   // Fetch flavours and machine ID
@@ -52,168 +54,201 @@ const Payment = () => {
         });
         setFlavoursMap(map);
 
-        // Find machine ID by matching selected machine name
-        // Machines collection is optional - if it fails, continue without it
+        // Find machine ID and name by matching selected machine
         try {
           const machines = await api.getMachines();
           if (order.selectedMachine && machines.length > 0) {
-            // Find machine by name (MACHINE-001, etc.)
+            // Try to find machine by name (MACHINE-001, etc.)
             const matchedMachine = machines.find(
               m => m.name === order.selectedMachine?.id
             );
             if (matchedMachine) {
               setMachineId(matchedMachine.id);
-              console.log('Matched machine:', order.selectedMachine.id, '-> Firestore ID:', matchedMachine.id);
+              setMachineName(matchedMachine.name);
             } else {
-              console.warn('Selected machine not found in database:', order.selectedMachine.id);
-              // Use env var or leave undefined - machines are optional
+              // Fallback: use selectedMachine.id as machine name if not found in API
               setMachineId(import.meta.env.VITE_MACHINE_ID);
+              setMachineName(order.selectedMachine.id);
             }
           } else {
-            // Fallback if no machine selected or machines collection empty
+            // No machine selected, use env var or default
             setMachineId(import.meta.env.VITE_MACHINE_ID);
+            // Try to get machine name from API if we have machineId
+            if (import.meta.env.VITE_MACHINE_ID && machines.length > 0) {
+              const envMachine = machines.find(m => m.id === import.meta.env.VITE_MACHINE_ID);
+              if (envMachine) {
+                setMachineName(envMachine.name);
+              }
+            }
           }
         } catch (error) {
-          // Machines collection might not exist - that's okay, continue without it
-          console.warn('Machines API failed (machines collection may not exist):', error);
           setMachineId(import.meta.env.VITE_MACHINE_ID);
+          // If we have selectedMachine, use its id as name
+          if (order.selectedMachine) {
+            setMachineName(order.selectedMachine.id);
+          }
         }
       } catch (error) {
         console.error('Error fetching data:', error);
-        // Continue anyway - will use mock mode if API fails
       }
     };
     fetchData();
   }, [order.selectedMachine]);
 
+  const prepareOrderData = () => {
+    const volumeInMl = order.quantity * 5;
+    
+    // Map flavour names to Firestore document IDs
+    const fallbackFlavourMap: Record<string, string> = {
+      'chocolate': 'chocolate',
+      'vanilla': 'vanilla',
+      'strawberry': 'strawberry',
+      'banana': 'banana',
+      'coffee': 'coffee',
+    };
+
+    const flavoursWithIds: Record<string, number> = {};
+    for (const [flavourName, scoops] of Object.entries(order.flavours)) {
+      if (scoops > 0) {
+        const firestoreId = flavoursMap[flavourName.toLowerCase()];
+        if (firestoreId) {
+          flavoursWithIds[firestoreId] = scoops;
+        } else {
+          const fallbackId = fallbackFlavourMap[flavourName.toLowerCase()] || flavourName.toLowerCase();
+          flavoursWithIds[fallbackId] = scoops;
+        }
+      }
+    }
+
+    return {
+      volumeInMl,
+      flavoursWithIds,
+      idempotencyKey: `${Date.now()}-${Math.random().toString(36).substring(7)}`,
+    };
+  };
+
   const handlePayment = async (method: 'upi' | 'card') => {
     // Prevent duplicate submissions
     if (isProcessing) {
-      console.warn('Payment already processing, ignoring duplicate request');
       return;
     }
 
     // Validate order is complete
-    if (!order.base) {
-      toast.error('Please select a base (milk or water)');
-      navigate('/base');
-      return;
-    }
-    if (order.quantity === 0 || !order.quantity) {
-      toast.error('Please select a quantity');
-      navigate('/quantity');
-      return;
-    }
-    if (Object.keys(order.flavours).length === 0) {
-      toast.error('Please select at least one flavour');
-      navigate('/flavour');
+    if (!order.base || order.quantity === 0 || Object.keys(order.flavours).length === 0) {
+      toast.error('Please complete your order first');
       return;
     }
 
     setIsProcessing(true);
-    toast.success(`Processing ${method.toUpperCase()} payment...`);
 
     try {
-      const volumeInMl = order.quantity * 5;
-      
-      // Map flavour names (chocolate, vanilla, etc.) to Firestore document IDs
-      // Use a fallback mapping if API fails
-      const fallbackFlavourMap: Record<string, string> = {
-        'chocolate': 'chocolate',
-        'vanilla': 'vanilla',
-        'strawberry': 'strawberry',
-        'banana': 'banana',
-        'coffee': 'coffee',
+      // Prepare order data
+      const { volumeInMl, flavoursWithIds, idempotencyKey } = prepareOrderData();
+
+      // Step 1: Create Razorpay order
+      toast.loading('Initializing payment...');
+      const razorpayOrder = await api.createPaymentOrder({
+        amount: order.totalPrice,
+        currency: 'INR',
+        receipt: `smartshake_${Date.now()}`,
+        notes: {
+          machineId: machineId || import.meta.env.VITE_MACHINE_ID || 'unknown',
+          base: order.base,
+          quantity: volumeInMl.toString(),
+        },
+      });
+
+      // Step 2: Open Razorpay checkout
+      const options = {
+        key: razorpayOrder.key_id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        name: 'Smartshake',
+        description: 'Protein Shake Order',
+        order_id: razorpayOrder.id,
+        handler: async (response: any) => {
+          try {
+            // Step 3: Verify payment signature
+            toast.loading('Verifying payment...');
+            const verification = await api.verifyPayment({
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+
+            if (!verification.verified) {
+              toast.error('Payment verification failed');
+              setIsProcessing(false);
+              return;
+            }
+
+            // Step 4: Create order in Firestore only after successful payment
+            // Capture machine info before creating order (closure variable)
+            const finalMachineId = machineId || import.meta.env.VITE_MACHINE_ID || 'machine-1';
+            // Prioritize: stored machineName > selectedMachine.id > default
+            const finalMachineName = machineName || order.selectedMachine?.id || finalMachineId || 'Machine-1';
+            
+            console.log('Creating order with machine info:', {
+              machineId: finalMachineId,
+              machineName: finalMachineName,
+              selectedMachine: order.selectedMachine,
+            });
+            
+            toast.loading('Creating your order...');
+            const { order: createdOrder } = await api.createOrder({
+              base: order.base,
+              quantity: volumeInMl,
+              total_price: order.totalPrice,
+              flavours: flavoursWithIds,
+              machineId: finalMachineId,
+              machineName: finalMachineName,
+              idempotencyKey,
+            });
+
+            // Store order ID and payment info
+            sessionStorage.setItem('currentOrderId', createdOrder.id);
+            sessionStorage.setItem('razorpayPaymentId', response.razorpay_payment_id);
+            sessionStorage.setItem('razorpayOrderId', response.razorpay_order_id);
+            
+            toast.success('Payment successful!');
+            setTimeout(() => {
+              navigate('/dispense');
+            }, 1000);
+          } catch (error: any) {
+            console.error('Error processing payment:', error);
+            toast.error(`Payment processing failed: ${error?.message || 'Unknown error'}`);
+            setIsProcessing(false);
+          }
+        },
+        prefill: {
+          name: 'Customer',
+          email: 'customer@smartshake.com',
+          contact: '9999999999',
+        },
+        theme: {
+          color: '#6366f1', // Primary color
+        },
+        modal: {
+          ondismiss: () => {
+            setIsProcessing(false);
+            toast.info('Payment cancelled');
+          },
+        },
       };
 
-      const flavoursWithIds: Record<string, number> = {};
-      for (const [flavourName, scoops] of Object.entries(order.flavours)) {
-        if (scoops > 0) {
-          // Try to get Firestore ID from API map first
-          const firestoreId = flavoursMap[flavourName.toLowerCase()];
-          if (firestoreId) {
-            flavoursWithIds[firestoreId] = scoops;
-          } else {
-            // Fallback: use flavour name as ID if API didn't load flavours
-            // This allows orders to work even if flavours collection is not set up
-            const fallbackId = fallbackFlavourMap[flavourName.toLowerCase()] || flavourName.toLowerCase();
-            flavoursWithIds[fallbackId] = scoops;
-            console.warn(`Using fallback flavour ID for "${flavourName}": ${fallbackId}`);
-          }
-        }
-      }
-
-      // Validate we have flavours
-      if (Object.keys(flavoursWithIds).length === 0) {
-        toast.error('Please select at least one flavour');
+      // Check if Razorpay is loaded
+      if (!window.Razorpay) {
+        toast.error('Payment gateway not loaded. Please refresh the page.');
         setIsProcessing(false);
         return;
       }
 
-      console.log('Creating order with:', {
-        base: order.base,
-        quantity: volumeInMl,
-        total_price: order.totalPrice,
-        flavours: flavoursWithIds,
-        machineId: machineId || import.meta.env.VITE_MACHINE_ID,
-        flavoursCount: Object.keys(flavoursWithIds).length,
-      });
-
-      // Validate before sending
-      if (!order.base) {
-        toast.error('Please select a base (milk or water)');
-        setIsProcessing(false);
-        return;
-      }
-      if (volumeInMl <= 0) {
-        toast.error('Please select a quantity');
-        setIsProcessing(false);
-        return;
-      }
-      if (order.totalPrice <= 0) {
-        toast.error('Invalid order total');
-        setIsProcessing(false);
-        return;
-      }
-
-      // Create real order in Firestore
-      // Use machineId from state (fetched from API) or env var
-      // Generate idempotency key to prevent duplicate orders
-      const idempotencyKey = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      
-      console.log('Calling API to create order...');
-      const { order: createdOrder } = await api.createOrder({
-        base: order.base,
-        quantity: volumeInMl,
-        total_price: order.totalPrice,
-        flavours: flavoursWithIds,
-        machineId: machineId || import.meta.env.VITE_MACHINE_ID,
-        machineName: order.selectedMachine?.id || undefined,
-        idempotencyKey,
-      });
-
-      console.log('✅ Order created successfully:', createdOrder.id);
-
-      // Store order ID in sessionStorage for dispense page
-      sessionStorage.setItem('currentOrderId', createdOrder.id);
-      sessionStorage.removeItem('orderStatus'); // Clear mock flag
-      
-      toast.success('Payment successful!');
-      setTimeout(() => {
-        navigate('/dispense');
-      }, 2000);
+      const razorpay = new window.Razorpay(options);
+      razorpay.open();
     } catch (error: any) {
-      console.error('❌ Error creating order:', error);
-      console.error('Error details:', {
-        message: error?.message,
-        stack: error?.stack,
-        flavours: order.flavours,
-        flavoursMap,
-        machineId,
-      });
-      toast.error(`Failed to create order: ${error?.message || 'Unknown error'}`);
+      console.error('Error initializing payment:', error);
+      toast.error(`Payment initialization failed: ${error?.message || 'Unknown error'}`);
       setIsProcessing(false);
-      // Don't fallback to mock mode - let user retry
     }
   };
 
@@ -283,9 +318,21 @@ const Payment = () => {
           >
             <QrCode className="w-24 h-24 mb-4 text-primary group-hover:scale-110 transition-transform" />
             <h3 className="text-3xl font-bold uppercase tracking-wide group-hover:text-primary transition-colors">
-              UPI / QR Code
+              Pay with Razorpay
             </h3>
-            <p className="text-lg text-muted-foreground mt-3">Scan & Pay</p>
+            <p className="text-lg text-muted-foreground mt-3">UPI, Cards, Wallets & More</p>
+          </button>
+
+          <button
+            onClick={() => handlePayment('card')}
+            disabled={isProcessing}
+            className="flex-1 glass-card rounded-2xl p-8 flex flex-col items-center justify-center transition-all duration-300 hover:scale-105 hover:ring-4 hover:ring-primary group disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <CreditCard className="w-24 h-24 mb-4 text-primary group-hover:scale-110 transition-transform" />
+            <h3 className="text-3xl font-bold uppercase tracking-wide group-hover:text-primary transition-colors">
+              Card Payment
+            </h3>
+            <p className="text-lg text-muted-foreground mt-3">Credit & Debit Cards</p>
           </button>
         </div>
       </div>
@@ -295,6 +342,7 @@ const Payment = () => {
           variant="kioskSecondary"
           size="kiosk"
           onClick={() => navigate('/quantity')}
+          disabled={isProcessing}
         >
           Back
         </Button>
