@@ -47,8 +47,8 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nYour private key here\n-----E
 FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@your-project.iam.gserviceaccount.com
 
 # Razorpay Payment Gateway (Test keys are pre-configured)
-RAZORPAY_KEY_ID=rzp_test_RfxCaQGgFsdSRu
-RAZORPAY_KEY_SECRET=XnUkIhgRiEoRf7KoRkChdtwH
+RAZORPAY_KEY_ID=
+RAZORPAY_KEY_SECRET=
 ```
 
 **Getting Firebase Credentials:**
