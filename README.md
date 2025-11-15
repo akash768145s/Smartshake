@@ -19,6 +19,7 @@ Smartshake is a full-stack solution for managing protein shake vending machines.
 - 📈 **Sales Analytics**: Revenue tracking, flavour popularity, and performance metrics
 - 🧹 **Cleaning Management**: Track and schedule machine cleaning cycles
 - ⚡ **Auto-refresh**: Dashboard updates every 30 seconds for real-time data
+- 🕐 **Smart Time Formatting**: Human-readable relative time (e.g., "2hr ago", "yesterday", "3 days ago")
 
 ## Technology Stack
 
@@ -34,9 +35,12 @@ Smartshake is a full-stack solution for managing protein shake vending machines.
 - TypeScript
 - Vite
 - Tailwind CSS
-- shadcn-ui
+- shadcn-ui (Radix UI components)
 - React Router
+- TanStack Query (React Query)
 - Recharts
+- Sonner (Toast notifications)
+- Lucide React (Icons)
 
 ## Prerequisites
 
@@ -236,22 +240,87 @@ pending → preparing → dispensing → completed
 
 Orders can also have a `failed` status if processing encounters errors.
 
-**Payment issues:**
-- Ensure Razorpay script is loaded (check `vendor/index.html`)
-- Use Indian test cards only (international cards won't work in test mode)
-- Check browser console for payment initialization errors
-- Verify backend payment routes are accessible
+## Troubleshooting
 
-### Common Errors
+### Backend Issues
+
+**Backend won't start:**
+- Verify `.env` file exists with correct Firebase credentials
+- Ensure Firestore is enabled in Firebase Console
+- Check Node.js version: `node --version` (should be 18+)
+- Review backend console logs for specific errors
+
+**Firebase connection errors:**
+- Verify `FIREBASE_PROJECT_ID` matches your Firebase project
+- Check that `FIREBASE_PRIVATE_KEY` includes quotes and `\n` characters
+- Ensure service account has Firestore permissions
+- Verify the JSON credentials file is valid
+
+**Port already in use:**
+- Change `PORT` in `.env` to a different port (e.g., 3002)
+- Or stop the process using port 3001
+
+### Frontend Issues
+
+**Vendor app can't create orders:**
+- Verify backend is running on port 3001
+- Check `VITE_API_URL` in vendor `.env` file
+- Open browser console (F12) for CORS or network errors
+- Ensure backend CORS is properly configured
+- Check that backend health endpoint responds: `http://localhost:3001/health`
+
+**Admin dashboard shows no data:**
+- Verify backend is running
+- Check `VITE_API_URL` in admin `.env` file
+- Run `npm run seed` in backend folder to populate initial data
+- Check browser console for API errors
+- Verify Firestore collections exist
+
+**Build errors:**
+- Clear `node_modules` and reinstall: `rm -rf node_modules && npm install`
+- Check Node.js version compatibility
+- Review error messages in terminal
+
+### Payment Issues
+
+**Payment gateway not loading:**
+- Ensure Razorpay script is loaded (check `vendor/index.html`)
+- Check browser console for script loading errors
+- Verify internet connection (script loads from CDN)
 
 **"International cards are not supported":**
 - Use Indian test cards: `5267 3181 8797 5449` or `5104 0600 0000 0008`
 - Or use UPI payment method with test UPI ID: `success@razorpay`
+- This is expected behavior in Razorpay test mode
+
+**Payment verification failed:**
+- Check backend logs for signature verification errors
+- Verify `RAZORPAY_KEY_SECRET` matches the key used to create the order
+- Ensure payment data is sent correctly from frontend
+
+**Order not created after payment:**
+- Check backend logs for errors during order creation
+- Verify Firestore connection
+- Check payment verification response in browser console
+- Ensure order data is valid (flavours, base, quantity)
+
+### Common Errors
 
 **"Unknown Machine" in orders:**
 - Ensure machine is selected in vendor app
 - Check that `VITE_MACHINE_ID` is set in vendor `.env`
 - Verify machines collection exists in Firestore
+- Run `npm run seed` in backend to create sample machines
+
+**CORS errors:**
+- Verify backend CORS middleware is configured
+- Check that frontend URL is allowed in CORS settings
+- Ensure backend is running before starting frontend apps
+
+**Date/time display issues:**
+- Verify timestamps are stored correctly in Firestore
+- Check browser timezone settings
+- Ensure date conversion utilities are working correctly
 
 ## Production Deployment
 
@@ -345,12 +414,49 @@ npm run build
 
 ISC
 
+## Additional Features
+
+### Time Formatting
+
+The admin dashboard includes smart time formatting that displays:
+- **Less than 1 minute**: "just now"
+- **1-59 minutes**: "5m ago", "30m ago"
+- **1-23 hours**: "1hr ago", "12hr ago"
+- **24-47 hours**: "yesterday"
+- **48+ hours**: "2 days ago", "5 days ago"
+
+This provides a better user experience compared to raw timestamps.
+
+### Order Flow
+
+The vendor app guides customers through a complete ordering experience:
+1. **Welcome** - Machine selection
+2. **Flavour Selection** - Choose protein flavours and scoops
+3. **Base Selection** - Select milk or water base
+4. **Quantity Selection** - Choose volume (0-500ml)
+5. **Payment** - Secure Razorpay checkout
+6. **Dispense** - Real-time progress tracking
+7. **Done** - Order completion confirmation
+
+### Admin Dashboard Pages
+
+- **Overview**: KPIs, charts, fleet health, recent activity
+- **Machines**: Machine status, inventory levels, uptime metrics
+- **Stocks**: Inventory management and levels
+- **Sales**: Revenue analytics, flavour popularity, trends
+- **Alerts**: System alerts with filtering and management
+- **Cleaning**: Cleaning schedules and compliance tracking
+- **Settings**: System configuration
+- **Support**: Help and documentation
+
 ## Support
 
 For issues and questions:
 - Check the troubleshooting section above
 - Review console logs for error messages
 - Verify all environment variables are set correctly
+- Check Firebase Console for Firestore data and errors
+- Review Razorpay Dashboard for payment logs
 
 ---
 
